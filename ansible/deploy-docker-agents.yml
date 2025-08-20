@@ -2,7 +2,6 @@
   hosts: vps_servers
   become: yes
   tasks:
-    # --- Sektion 1: Sikker og konsistent Docker-installation ---
     - name: Remove existing Docker repository files to avoid conflicts
       ansible.builtin.file:
         path: "{{ item }}"
@@ -58,7 +57,6 @@
         state: present
         update_cache: yes
 
-    # --- Sektion 2: Udrulning af monitoring-containere ---
     - name: Create directory for docker-compose setup
       ansible.builtin.file:
         path: /opt/monitoring
@@ -119,6 +117,6 @@
 
     - name: Start monitoring services with docker-compose
       ansible.builtin.command:
-        # Using the modern `docker compose` (with space) command
+
         cmd: docker compose up -d
         chdir: /opt/monitoring
