@@ -1,0 +1,124 @@
+- name: Deploy Observability Agents via Docker
+  hosts: vps_servers
+  become: yes
+  tasks:
+    # --- Sektion 1: Sikker og konsistent Docker-installation ---
+    - name: Remove existing Docker repository files to avoid conflicts
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/docker.list
+        - /usr/share/keyrings/docker-archive-keyring.gpg
+
+    - name: Remove old Docker versions to avoid conflicts
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-doc
+          - docker-compose
+          - containerd
+          - runc
+        state: absent
+
+    - name: Install prerequisite packages for Docker repository
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+        update_cache: yes
+
+    - name: Create directory for apt keyrings
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Add Docker's official GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/debian/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+        force: yes
+
+    - name: Add Docker repository to Apt sources
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/{{ ansible_distribution|lower }} {{ ansible_lsb.codename }} stable"
+        state: present
+
+    - name: Install the latest Docker Engine and Docker Compose
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+
+    # --- Sektion 2: Udrulning af monitoring-containere ---
+    - name: Create directory for docker-compose setup
+      ansible.builtin.file:
+        path: /opt/monitoring
+        state: directory
+        mode: '0755'
+
+    - name: Create Promtail configuration file
+      ansible.builtin.copy:
+        dest: /opt/monitoring/promtail-config.yml
+        content: |
+          server:
+            http_listen_port: 9080
+            grpc_listen_port: 0
+          positions:
+            filename: /tmp/positions.yaml
+          clients:
+            - url: http://your-loki-server:3100/loki/api/v1/push
+          scrape_configs:
+          - job_name: system
+            static_configs:
+            - targets:
+                - localhost
+              labels:
+                job: varlogs
+                __path__: /var/log/*.log
+
+    - name: Create docker-compose.yml for monitoring agents
+      ansible.builtin.copy:
+        dest: /opt/monitoring/docker-compose.yml
+        content: |
+          version: '3.8'
+          services:
+            node-exporter:
+              image: prom/node-exporter:latest
+              container_name: node-exporter
+              restart: unless-stopped
+              volumes:
+                - /proc:/host/proc:ro
+                - /sys:/host/sys:ro
+                - /:/rootfs:ro
+              command:
+                - '--path.procfs=/host/proc'
+                - '--path.sysfs=/host/sys'
+                - '--path.rootfs=/rootfs'
+                - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+              ports:
+                - "9100:9100"
+
+            promtail:
+              image: grafana/promtail:latest
+              container_name: promtail
+              restart: unless-stopped
+              volumes:
+                - /opt/monitoring/promtail-config.yml:/etc/promtail/config.yml
+                - /var/log:/var/log
+              ports:
+                - "9080:9080"
+
+    - name: Start monitoring services with docker-compose
+      ansible.builtin.command:
+        # Using the modern `docker compose` (with space) command
+        cmd: docker compose up -d
+        chdir: /opt/monitoring
