@@ -29,8 +29,6 @@ All communication happens securely over SSH using key-based authentication.
 
 This repository demonstrates a deliberate migration from a traditional to a modern deployment strategy, showcasing a full application lifecycle management approach.
 
-Initially, the agents were installed directly on the host operating system ("bare-metal"). While functional, this approach presented challenges with dependency management and scalability. The project was then evolved to deploy the agents as Docker containers, which is the current and recommended setup.
-
 * **`deploy-docker-agents.yml` (Recommended):** The primary playbook that deploys the observability agents as isolated Docker containers for a modern, scalable, and consistent setup.
 * **`cleanup-bare-metal.yml`:** A utility playbook designed to uninstall the previous bare-metal versions of these agents, facilitating a clean migration to the containerized approach.
 
@@ -53,7 +51,7 @@ Initially, the agents were installed directly on the host operating system ("bar
     ```
 
 3.  **Uninstall previous versions (if applicable):**
-    If you previously installed the agents directly on the host, run the cleanup playbook to ensure a clean state.
+    Run the cleanup playbook to ensure a clean state.
     ```bash
     ansible-playbook -i inventory.ini cleanup-bare-metal.yml
     ```
@@ -68,12 +66,13 @@ Initially, the agents were installed directly on the host operating system ("bar
 
 ## Challenges & Solutions
 
-This project involved overcoming challenges in both the initial bare-metal phase and the migration to Docker.
+* **Challenge:** Ensuring a consistent and correct Docker installation across multiple servers with different operating systems (Debian and Ubuntu) and pre-existing, conflicting packages.
+    * **Solution:** The Ansible playbook was made more robust. It now explicitly removes old/conflicting Docker packages and repository files *before* adding the official Docker repository and installing the latest `docker-ce` package. This guarantees a standardized environment on all hosts, regardless of their history.
 
-* **Challenge (Bare-Metal):** The initial Ansible playbook failed with a Python `HTTPSConnection` error on the control node due to dependency conflicts within the system's Python environment.
+* **Challenge:** The initial Ansible playbook failed with a Python `HTTPSConnection` error on the control node due to dependency conflicts within the system's Python environment.
     * **Solution:** The problem was solved by creating an isolated **Python virtual environment** (`venv`) and installing Ansible cleanly inside it. This is a best-practice for running Python-based tools and ensures a stable, predictable environment for automation tasks.
 
-* **Challenge (Migration):** Managing application dependencies and ensuring consistent environments across multiple servers with a bare-metal approach proved to be brittle and hard to scale.
+* **Challenge:** Managing application dependencies and ensuring consistent environments with a bare-metal approach proved to be brittle and hard to scale.
     * **Solution:** Migrated the services from bare-metal installation to **Docker containers**. This encapsulates all dependencies, simplifies deployment, and makes the setup far more portable and scalable. The entire container configuration is now managed by Ansible, demonstrating a layered automation approach.
 
 ---
