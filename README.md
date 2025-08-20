@@ -64,12 +64,28 @@ This repository demonstrates a migration from a traditional to a modern deployme
 
 ---
 
-## Challenges & Solutions
+## Project Evolution & Key Challenges
+
+This project was developed in two phases, showcasing a progression from manual troubleshooting to full automation.
+
+### Phase 1: Manual WireGuard VPN Setup
+
+The initial goal was to establish a secure "VPN-to-home" solution. This involved several deep networking challenges:
+
+* **Challenge:** Encrypted packets from clients arrived at the VPS host but were not being forwarded to the WireGuard Docker container.
+    * **Solution:** Using `tcpdump` on both the public (`eth0`) and Docker bridge (`docker0`) interfaces, I proved that the host's firewall (UFW) was dropping the packets. The issue was resolved by adding a specific `iptables` rule to the `DOCKER-USER` chain, which is the correct way to manage firewall exceptions for Docker, bypassing UFW conflicts.
+
+* **Challenge:** The WireGuard Docker container failed to start or would ignore its `wg0.conf` file, despite the file being correctly mounted.
+    * **Solution:** After verifying the file path and permissions, I concluded the issue was a silent parsing error caused by invisible characters or incorrect text formatting in the config file. The problem was solved by deleting the file and recreating it cleanly using a `heredoc` (`cat << EOF`) shell command, which guarantees a pure text file without metadata.
+
+### Phase 2: Migration to Automated Provisioning
+
+To make the setup scalable and reproducible, the project evolved to use Ansible for configuration management.
 
 * **Challenge:** Managing application dependencies and ensuring consistent environments across multiple servers with a bare-metal approach.
     * **Solution:** Migrated the services from bare-metal installation to **Docker containers**. This encapsulates all dependencies, simplifies deployment, and makes the setup far more portable and scalable. The entire container configuration is now managed by Ansible, demonstrating a layered automation approach.
 
-* **Challenge:** The initial playbook failed with a Python `HTTPSConnection` error on the control node due to dependency conflicts.
+* **Challenge:** The initial Ansible playbook failed with a Python `HTTPSConnection` error on the control node due to dependency conflicts.
     * **Solution:** The problem was solved by creating an isolated **Python virtual environment** (`venv`) and installing Ansible cleanly inside it. This is a best-practice for running Python-based tools and ensures a stable, predictable environment.
 
 ---
