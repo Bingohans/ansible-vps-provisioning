@@ -25,9 +25,11 @@ All communication happens securely over SSH using key-based authentication.
 
 ---
 
-## Features Automated
+## Project Evolution: From Bare-Metal to Containers
 
-This repository demonstrates a migration from a traditional to a modern deployment strategy:
+This repository demonstrates a deliberate migration from a traditional to a modern deployment strategy, showcasing a full application lifecycle management approach.
+
+Initially, the agents were installed directly on the host operating system ("bare-metal"). While functional, this approach presented challenges with dependency management and scalability. The project was then evolved to deploy the agents as Docker containers, which is the current and recommended setup.
 
 * **`deploy-docker-agents.yml` (Recommended):** The primary playbook that deploys the observability agents as isolated Docker containers for a modern, scalable, and consistent setup.
 * **`cleanup-bare-metal.yml`:** A utility playbook designed to uninstall the previous bare-metal versions of these agents, facilitating a clean migration to the containerized approach.
@@ -51,7 +53,7 @@ This repository demonstrates a migration from a traditional to a modern deployme
     ```
 
 3.  **Uninstall previous versions (if applicable):**
-    Run the cleanup playbook to ensure a clean state.
+    If you previously installed the agents directly on the host, run the cleanup playbook to ensure a clean state.
     ```bash
     ansible-playbook -i inventory.ini cleanup-bare-metal.yml
     ```
@@ -64,29 +66,15 @@ This repository demonstrates a migration from a traditional to a modern deployme
 
 ---
 
-## Project Evolution & Key Challenges
+## Challenges & Solutions
 
-This project was developed in two phases, showcasing a progression from manual troubleshooting to full automation.
+This project involved overcoming challenges in both the initial bare-metal phase and the migration to Docker.
 
-### Phase 1: Manual WireGuard VPN Setup
+* **Challenge (Bare-Metal):** The initial Ansible playbook failed with a Python `HTTPSConnection` error on the control node due to dependency conflicts within the system's Python environment.
+    * **Solution:** The problem was solved by creating an isolated **Python virtual environment** (`venv`) and installing Ansible cleanly inside it. This is a best-practice for running Python-based tools and ensures a stable, predictable environment for automation tasks.
 
-The initial goal was to establish a secure "VPN-to-home" solution. This involved several deep networking challenges:
-
-* **Challenge:** Encrypted packets from clients arrived at the VPS host but were not being forwarded to the WireGuard Docker container.
-    * **Solution:** Using `tcpdump` on both the public (`eth0`) and Docker bridge (`docker0`) interfaces, I proved that the host's firewall (UFW) was dropping the packets. The issue was resolved by adding a specific `iptables` rule to the `DOCKER-USER` chain, which is the correct way to manage firewall exceptions for Docker, bypassing UFW conflicts.
-
-* **Challenge:** The WireGuard Docker container failed to start or would ignore its `wg0.conf` file, despite the file being correctly mounted.
-    * **Solution:** After verifying the file path and permissions, I concluded the issue was a silent parsing error caused by invisible characters or incorrect text formatting in the config file. The problem was solved by deleting the file and recreating it cleanly using a `heredoc` (`cat << EOF`) shell command, which guarantees a pure text file without metadata.
-
-### Phase 2: Migration to Automated Provisioning
-
-To make the setup scalable and reproducible, the project evolved to use Ansible for configuration management.
-
-* **Challenge:** Managing application dependencies and ensuring consistent environments across multiple servers with a bare-metal approach.
+* **Challenge (Migration):** Managing application dependencies and ensuring consistent environments across multiple servers with a bare-metal approach proved to be brittle and hard to scale.
     * **Solution:** Migrated the services from bare-metal installation to **Docker containers**. This encapsulates all dependencies, simplifies deployment, and makes the setup far more portable and scalable. The entire container configuration is now managed by Ansible, demonstrating a layered automation approach.
-
-* **Challenge:** The initial Ansible playbook failed with a Python `HTTPSConnection` error on the control node due to dependency conflicts.
-    * **Solution:** The problem was solved by creating an isolated **Python virtual environment** (`venv`) and installing Ansible cleanly inside it. This is a best-practice for running Python-based tools and ensures a stable, predictable environment.
 
 ---
 
