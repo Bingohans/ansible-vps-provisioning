@@ -1,0 +1,30 @@
+- name: Uninstall Observability Agents
+  hosts: vps_servers
+  become: yes
+  tasks:
+    - name: Stop and disable promtail service
+      ansible.builtin.service:
+        name: promtail
+        state: stopped
+        enabled: no
+      ignore_errors: yes 
+
+    - name: Remove Promtail files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/local/bin/promtail
+        - /usr/local/bin/promtail-linux-amd64
+        - /etc/promtail
+        - /etc/systemd/system/promtail.service
+
+    - name: Reload systemd to apply changes
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Remove prometheus-node-exporter package
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: absent
+        purge: yes 
