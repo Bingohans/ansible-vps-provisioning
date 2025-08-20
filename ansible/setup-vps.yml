@@ -1,0 +1,91 @@
+- name: Deploy Observability Agents on VPS Servers
+  hosts: vps_servers
+  become: yes
+
+  tasks:
+    - name: Update APT package cache and install dependencies
+      ansible.builtin.apt:
+        name:
+          - prometheus-node-exporter
+          - unzip
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Ensure node_exporter service is running and enabled
+      ansible.builtin.service:
+        name: prometheus-node-exporter
+        state: started
+        enabled: yes
+
+    - name: Download and unarchive Promtail binary
+      ansible.builtin.unarchive:
+        src: https://github.com/grafana/loki/releases/download/v2.9.1/promtail-linux-amd64.zip
+        dest: /usr/local/bin/
+        remote_src: yes
+        mode: '0755'
+        creates: /usr/local/bin/promtail-linux-amd64
+
+    - name: Rename promtail binary for easier use
+      ansible.builtin.copy:
+        src: /usr/local/bin/promtail-linux-amd64
+        dest: /usr/local/bin/promtail
+        remote_src: yes
+        mode: '0755'
+        force: no
+
+    - name: Create Promtail configuration directory
+      ansible.builtin.file:
+        path: /etc/promtail
+        state: directory
+        mode: '0755'
+
+    - name: Create Promtail config file
+      ansible.builtin.copy:
+        dest: /etc/promtail/config.yml
+        content: |
+          server:
+            http_listen_port: 9080
+            grpc_listen_port: 0
+
+          positions:
+            filename: /tmp/positions.yaml
+
+          clients:
+            - url: http://your-loki-server:3100/loki/api/v1/push
+
+          scrape_configs:
+          - job_name: system
+            static_configs:
+            - targets:
+                - localhost
+              labels:
+                job: varlogs
+                __path__: /var/log/*.log
+
+    - name: Create Promtail systemd service file
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/promtail.service
+        content: |
+          [Unit]
+          Description=Promtail service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=root
+          ExecStart=/usr/local/bin/promtail -config.file /etc/promtail/config.yml
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd, enable and start Promtail service
+      ansible.builtin.systemd:
+        name: promtail
+        daemon_reload: yes
+        state: started
+        enabled: yes
+
+    - name: Print a confirmation message
+      ansible.builtin.debug:
+        msg: "Node Exporter and Promtail are now installed and running on {{ inventory_hostname }}!"
